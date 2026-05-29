@@ -15,10 +15,28 @@ spec:
     command: ["cat"]
     tty: true
 
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:v1.23.2-debug
+  - name: docker
+    image: docker:29-cli
     command: ["cat"]
     tty: true
+    env:
+    - name: DOCKER_HOST
+      value: tcp://localhost:2375
+    - name: DOCKER_TLS_VERIFY
+      value: "0"
+
+  - name: dind
+    image: docker:29-dind
+    securityContext:
+      privileged: true
+    command: ["dockerd"]
+    args:
+    - "--host=tcp://0.0.0.0:2375"
+    - "--tls=false"
+    - "--insecure-registry=172.20.0.2:4000"
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
 
   - name: kubectl
     image: bitnami/kubectl:latest
@@ -26,10 +44,6 @@ spec:
     tty: true
 """
         }
-    }
-
-    triggers {
-        pollSCM('* * * * *')
     }
 
     stages {
@@ -42,19 +56,18 @@ spec:
             }
         }
 
-        stage('Build & Push Image') {
+        stage('Build & Push') {
             steps {
-                container('kaniko') {
+                container('docker') {
                     sh '''
-                        echo "=== Building with Kaniko ==="
+                        echo "Waiting for DinD..."
+                        sleep 8
 
-                        /kaniko/executor \
-                          --context . \
-                          --dockerfile Dockerfile \
-                          --destination 172.20.0.2:4000/flask_hello:latest \
-                          --insecure \
-                          --insecure-registry 172.20.0.2:4000 \
-                          --verbosity=info
+                        echo "Building image..."
+                        docker --host tcp://localhost:2375 build -t 172.20.0.2:4000/flask_hello:latest .
+
+                        echo "Pushing image..."
+                        docker --host tcp://localhost:2375 push 172.20.0.2:4000/flask_hello:latest
                     '''
                 }
             }
