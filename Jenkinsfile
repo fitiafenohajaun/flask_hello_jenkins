@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            label 'jenkins-agent-flask'
+            label 'jenkins-agent-my-app'
             yaml """
 apiVersion: v1
 kind: Pod
@@ -12,19 +12,22 @@ spec:
   containers:
   - name: python
     image: python:3.12-slim
-    command: ['cat']
+    command: ["cat"]
     tty: true
+
   - name: docker
-    image: docker:20.10
-    command: ['cat']
+    image: docker:29-cli          # ← Mis à jour pour ta version 29.5.2
+    command: ["cat"]
     tty: true
     volumeMounts:
     - mountPath: /var/run/docker.sock
       name: docker-sock
+
   - name: kubectl
     image: bitnami/kubectl:latest
-    command: ['cat']
+    command: ["cat"]
     tty: true
+
   volumes:
   - name: docker-sock
     hostPath:
@@ -42,7 +45,7 @@ spec:
             steps {
                 container('python') {
                     sh "pip install -r requirements.txt"
-                    sh "python test.py --verbose"
+                    sh "python test.py"
                 }
             }
         }
@@ -50,10 +53,12 @@ spec:
         stage('Build image') {
             steps {
                 container('docker') {
-                    sh """
-                        docker build -t 172.20.0.2:4000/flask_hello:latest .
-                        docker push 172.20.0.2:4000/flask_hello:latest
-                    """
+                    sh '''
+                        docker build -t 172.20.0.2:4000/pythontest:latest .
+                    '''
+                    sh '''
+                        docker push 172.20.0.2:4000/pythontest:latest
+                    '''
                 }
             }
         }
