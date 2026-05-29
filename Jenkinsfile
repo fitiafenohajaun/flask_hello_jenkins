@@ -15,64 +15,69 @@ spec:
     command: ["cat"]
     tty: true
 
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:v1.23.2-debug
+  - name: docker
+    image: docker:29-cli
     command: ["cat"]
     tty: true
-    volumeMounts:
-    - mountPath: /kaniko/.docker
-      name: docker-config
+    env:
+    - name: DOCKER_HOST
+      value: tcp://localhost:2375
+    - name: DOCKER_TLS_VERIFY
+      value: "0"
+    - name: DOCKER_BUILDKIT
+      value: "0"
+
+  - name: dind
+    image: docker:29-dind
+    securityContext:
+      privileged: true
+    command: ["dockerd"]
+    args:
+    - "--host=tcp://0.0.0.0:2375"
+    - "--tls=false"
+    - "--insecure-registry=172.20.0.2:4000"
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
 
   - name: kubectl
     image: bitnami/kubectl:latest
     command: ["cat"]
     tty: true
-
-  volumes:
-  - name: docker-config
-    emptyDir: {}
 """
         }
     }
 
     stages {
-        stage('Test python') {
+        stage('Build image') {
             steps {
-                container('python') {
-                    sh "pip install -r requirements.txt"
-                    sh "python test.py"
-                }
-            }
-        }
-
-        stage('Build & Push with Kaniko') {
-            steps {
-                container('kaniko') {
+                container('docker') {
                     sh '''
-                        # Configuration du registry (insecure)
-                        cat > /kaniko/.docker/config.json << EOF
-{
-  "auths": {},
-  "insecure-registries": ["172.20.0.2:4000"]
-}
-EOF
-
-                        /kaniko/executor \
-                          --context . \
-                          --dockerfile Dockerfile \
-                          --destination 172.20.0.2:4000/flask_hello:latest \
-                          --insecure \
-                          --insecure-registry 172.20.0.2:4000
+                        set -x
+                        
+                        echo "=== Forcing Docker configuration ==="
+                        mkdir -p ~/.docker
+                        echo "{}" > ~/.docker/config.json
+                        
+                        echo "=== Environment ==="
+                        env | grep -E "DOCKER|PATH"
+                        
+                        echo "=== Testing connection ==="
+                        docker --debug info || echo "Failed to connect"
+                        
+                        echo "=== Waiting for dind (60 seconds max) ==="
+                        timeout=20
+                        for i in $(seq 1 $timeout); do
+                            if docker info >/dev/null 2>&1; then
+                                echo "✅ Docker daemon ready !"
+                                break
+                            fi
+                            sleep 3
+                        done
+                        
+                        echo "=== Building ==="
+                        docker build -t 172.20.0.2:4000/flask_hello:latest .
                     '''
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                container('kubectl') {
-                    sh "kubectl apply -f ./kubernetes/deployment.yaml"
-                    sh "kubectl apply -f ./kubernetes/service.yaml"
                 }
             }
         }
