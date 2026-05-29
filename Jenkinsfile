@@ -1,84 +1,108 @@
 pipeline {
     agent {
         kubernetes {
-            // Ce label sera le préfixe du nom du pod créé par Jenkins
             label 'jenkins-agent-my-app'
+
             yaml """
 apiVersion: v1
 kind: Pod
 metadata:
   labels:
     component: ci
+
 spec:
   containers:
-  # Conteneur 1 : pour exécuter les tests Python
+
+  # Conteneur Python pour les tests
   - name: python
     image: python:3.12-slim
     command:
     - cat
     tty: true
 
-  # Conteneur 2 : pour builder et pousser l'image Docker
-  - name: docker
-    image: docker
+  # Conteneur Kaniko pour build et push Docker image
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:latest
     command:
-    - cat
+    - /busybox/cat
     tty: true
-    volumeMounts:
-    - mountPath: /var/run/docker.sock
-      name: docker-sock
 
-  # Conteneur 3 : pour déployer dans Kubernetes avec kubectl
+  # Conteneur kubectl pour le déploiement Kubernetes
   - name: kubectl
-    image: lachlanevenson/k8s-kubectl:v1.17.2
+    image: bitnami/kubectl:latest
     command:
     - cat
     tty: true
-
-  # Volume partagé : donne accès au socket Docker de la machine hôte
-  volumes:
-  - name: docker-sock
-    hostPath:
-      path: /var/run/docker.sock
 """
         }
     }
 
-    // Déclenche automatiquement le pipeline si le dépôt Git a changé (vérifie toutes les minutes)
     triggers {
         pollSCM('* * * * *')
     }
 
+    environment {
+        IMAGE_NAME = "172.20.0.2:4000/flask_hello:latest"
+    }
+
     stages {
 
-        // STAGE 1 : Lancer les tests unitaires Python
-        stage('Test python') {
+        // =========================
+        // STAGE 1 : TESTS PYTHON
+        // =========================
+        stage('Test Python') {
             steps {
                 container('python') {
-                    sh "pip install -r requirements.txt"
-                    sh "python test.py"
+                    sh '''
+                    pip install --no-cache-dir -r requirements.txt
+                    python test.py
+                    '''
                 }
             }
         }
 
-        // STAGE 2 : Construire l'image Docker et la pousser sur le registry local
-        stage('Build image') {
+        // =========================
+        // STAGE 2 : BUILD + PUSH IMAGE
+        // =========================
+        stage('Build & Push Image') {
             steps {
-                container('docker') {
-                    sh "docker build -t localhost:4000/pythontest:latest ."
-                    sh "docker push localhost:4000/pythontest:latest"
+                container('kaniko') {
+                    sh '''
+                    /kaniko/executor \
+                      --dockerfile=Dockerfile \
+                      --context=$(pwd) \
+                      --destination=$IMAGE_NAME \
+                      --insecure \
+                      --skip-tls-verify
+                    '''
                 }
             }
         }
 
-        // STAGE 3 : Déployer l'application dans Kubernetes
-        stage('Deploy') {
+        // =========================
+        // STAGE 3 : DEPLOIEMENT K8S
+        // =========================
+        stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
-                    sh "kubectl apply -f ./kubernetes/deployment.yaml"
-                    sh "kubectl apply -f ./kubernetes/service.yaml"
+                    sh '''
+                    kubectl apply -f kubernetes/deployment.yaml
+                    kubectl apply -f kubernetes/service.yaml
+                    '''
                 }
             }
+        }
+
+    }
+
+    post {
+
+        success {
+            echo 'Pipeline exécuté avec succès ✅'
+        }
+
+        failure {
+            echo 'Pipeline échoué ❌'
         }
 
     }
