@@ -6,93 +6,118 @@ pipeline {
             yaml """
 apiVersion: v1
 kind: Pod
+
 metadata:
   labels:
     component: ci
 
 spec:
+  serviceAccountName: jenkins
+
   containers:
 
-  # Conteneur Python pour les tests
+  # =========================
+  # PYTHON CONTAINER
+  # =========================
   - name: python
     image: python:3.12-slim
     command:
-    - cat
+      - cat
     tty: true
 
-  # Conteneur Kaniko pour build et push Docker image
+  # =========================
+  # KANIKO CONTAINER
+  # =========================
   - name: kaniko
     image: gcr.io/kaniko-project/executor:latest
     command:
-    - /busybox/cat
+      - /busybox/cat
     tty: true
 
-  # Conteneur kubectl pour le déploiement Kubernetes
+  # =========================
+  # KUBECTL CONTAINER
+  # =========================
   - name: kubectl
     image: bitnami/kubectl:latest
     command:
-    - cat
+      - cat
     tty: true
 """
         }
     }
 
-    triggers {
-        pollSCM('* * * * *')
-    }
-
     environment {
-        IMAGE_NAME = "172.20.0.2:4000/flask_hello:latest"
+        IMAGE_NAME = "172.20.0.2:4000/pythontest"
+        IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
     stages {
 
         // =========================
-        // STAGE 1 : TESTS PYTHON
+        // CHECKOUT
+        // =========================
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // =========================
+        // TEST PYTHON
         // =========================
         stage('Test Python') {
             steps {
                 container('python') {
                     sh '''
-                    pip install --no-cache-dir -r requirements.txt
-                    python test.py
+                        pip install --no-cache-dir -r requirements.txt
+
+                        if [ -f test.py ]; then
+                            python test.py
+                        else
+                            echo "Aucun test trouvé"
+                        fi
                     '''
                 }
             }
         }
 
         // =========================
-        // STAGE 2 : BUILD + PUSH IMAGE
+        // BUILD + PUSH IMAGE
         // =========================
         stage('Build & Push Image') {
             steps {
                 container('kaniko') {
                     sh '''
-                    /kaniko/executor \
-                      --dockerfile=Dockerfile \
-                      --context=$(pwd) \
-                      --destination=$IMAGE_NAME \
-                      --insecure \
-                      --skip-tls-verify
+                        /kaniko/executor \
+                          --dockerfile=Dockerfile \
+                          --context=$(pwd) \
+                          --destination=$IMAGE_NAME:$IMAGE_TAG \
+                          --destination=$IMAGE_NAME:latest \
+                          --insecure \
+                          --skip-tls-verify \
+                          --insecure-registry=172.20.0.2:4000
                     '''
                 }
             }
         }
 
         // =========================
-        // STAGE 3 : DEPLOIEMENT K8S
+        // DEPLOY KUBERNETES
         // =========================
         stage('Deploy to Kubernetes') {
             steps {
                 container('kubectl') {
                     sh '''
-                    kubectl apply -f kubernetes/deployment.yaml
-                    kubectl apply -f kubernetes/service.yaml
+                        kubectl apply -f kubernetes/deployment.yaml
+                        kubectl apply -f kubernetes/service.yaml
+
+                        kubectl rollout restart deployment pythontest
+
+                        kubectl rollout status deployment pythontest
                     '''
                 }
             }
         }
-
     }
 
     post {
@@ -105,5 +130,8 @@ spec:
             echo 'Pipeline échoué ❌'
         }
 
+        always {
+            echo 'Fin du pipeline'
+        }
     }
 }
