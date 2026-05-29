@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="TestHello-20260520031627" tests="3" file=".py" time="0.071" timestamp="2026-05-20T03:16:27" failures="0" errors="0" skipped="0">
+	<testcase classname="TestHello" name="test_hello" time="0.069" timestamp="2026-05-20T03:16:27" file="test.py" line="10"/>
+	<testcase classname="TestHello" name="test_hello_hello" time="0.001" timestamp="2026-05-20T03:16:27" file="test.py" line="15"/>
+	<testcase classname="TestHello" name="test_hello_name" time="0.001" timestamp="2026-05-20T03:16:27" file="test.py" line="20"/>
+</testsuite>

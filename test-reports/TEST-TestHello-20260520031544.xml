@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="TestHello-20260520031544" tests="3" file=".py" time="0.083" timestamp="2026-05-20T03:15:44" failures="2" errors="0" skipped="0">
+	<testcase classname="TestHello" name="test_hello_name" time="0.001" timestamp="2026-05-20T03:15:44" file="test.py" line="20"/>
+	<testcase classname="TestHello" name="test_hello" time="0.079" timestamp="2026-05-20T03:15:44" file="test.py" line="10">
+		<failure type="AssertionError" message="b'Hello World!' != b'Hello World!\n'"><![CDATA[Traceback (most recent call last):
+  File [35m"C:\Users\OMEN\Desktop\DevOPS\flask_app\test.py"[0m, line [35m13[0m, in [35mtest_hello[0m
+    [31mself.assertEqual[0m[1;31m(rv.data, b'Hello World!\n')[0m
+    [31m~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35mb'Hello World!' != b'Hello World!\n'[0m
+]]></failure>
+	</testcase>
+	<testcase classname="TestHello" name="test_hello_hello" time="0.003" timestamp="2026-05-20T03:15:44" file="test.py" line="15">
+		<failure type="AssertionError" message="b'Hello World!' != b'Hello World!\n'"><![CDATA[Traceback (most recent call last):
+  File [35m"C:\Users\OMEN\Desktop\DevOPS\flask_app\test.py"[0m, line [35m18[0m, in [35mtest_hello_hello[0m
+    [31mself.assertEqual[0m[1;31m(rv.data, b'Hello World!\n')[0m
+    [31m~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35mb'Hello World!' != b'Hello World!\n'[0m
+]]></failure>
+	</testcase>
+</testsuite>
