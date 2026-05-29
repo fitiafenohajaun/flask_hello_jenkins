@@ -1,8 +1,8 @@
 pipeline {
     agent {
         kubernetes {
+            // Ce label sera le préfixe du nom du pod créé par Jenkins
             label 'jenkins-agent-my-app'
-            inheritFrom ''                    // ← Important : ignore les templates existants
             yaml """
 apiVersion: v1
 kind: Pod
@@ -11,43 +11,47 @@ metadata:
     component: ci
 spec:
   containers:
+  # Conteneur 1 : pour exécuter les tests Python
   - name: python
     image: python:3.12-slim
-    command: ["cat"]
+    command:
+    - cat
     tty: true
 
+  # Conteneur 2 : pour builder et pousser l'image Docker
   - name: docker
-    image: docker:29-cli
-    command: ["cat"]
+    image: docker
+    command:
+    - cat
     tty: true
-    env:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
-    - name: DOCKER_TLS_VERIFY
-      value: "0"
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: docker-sock
 
-  - name: dind
-    image: docker:29-dind
-    securityContext:
-      privileged: true
-    command: ["dockerd"]
-    args:
-    - "--host=tcp://0.0.0.0:2375"
-    - "--tls=false"
-    - "--insecure-registry=172.20.0.2:4000"
-    env:
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
-
+  # Conteneur 3 : pour déployer dans Kubernetes avec kubectl
   - name: kubectl
-    image: bitnami/kubectl:latest
-    command: ["cat"]
+    image: lachlanevenson/k8s-kubectl:v1.17.2
+    command:
+    - cat
     tty: true
+
+  # Volume partagé : donne accès au socket Docker de la machine hôte
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
 """
         }
     }
 
+    // Déclenche automatiquement le pipeline si le dépôt Git a changé (vérifie toutes les minutes)
+    triggers {
+        pollSCM('* * * * *')
+    }
+
     stages {
+
+        // STAGE 1 : Lancer les tests unitaires Python
         stage('Test python') {
             steps {
                 container('python') {
@@ -57,23 +61,17 @@ spec:
             }
         }
 
-        stage('Build & Push') {
+        // STAGE 2 : Construire l'image Docker et la pousser sur le registry local
+        stage('Build image') {
             steps {
                 container('docker') {
-                    sh '''
-                        echo "Waiting for DinD daemon..."
-                        sleep 12
-                        
-                        echo "Building image..."
-                        docker --host tcp://localhost:2375 build -t 172.20.0.2:4000/flask_hello:latest .
-                        
-                        echo "Pushing image..."
-                        docker --host tcp://localhost:2375 push 172.20.0.2:4000/flask_hello:latest
-                    '''
+                    sh "docker build -t localhost:4000/pythontest:latest ."
+                    sh "docker push localhost:4000/pythontest:latest"
                 }
             }
         }
 
+        // STAGE 3 : Déployer l'application dans Kubernetes
         stage('Deploy') {
             steps {
                 container('kubectl') {
@@ -82,5 +80,6 @@ spec:
                 }
             }
         }
+
     }
 }
