@@ -11,7 +11,7 @@ metadata:
 spec:
   containers:
   - name: python
-    image: python:3.9
+    image: python:3.12-slim
     command: ['cat']
     tty: true
   - name: docker
