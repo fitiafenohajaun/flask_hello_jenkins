@@ -19,26 +19,29 @@ spec:
     image: docker:29-cli
     command: ["cat"]
     tty: true
-    securityContext:
-      privileged: true          # Important
-      runAsUser: 0              # Exécuter en root
-    volumeMounts:
-    - mountPath: /var/run/docker.sock
-      name: docker-sock
     env:
     - name: DOCKER_HOST
-      value: unix:///var/run/docker.sock
+      value: tcp://localhost:2375
+    - name: DOCKER_TLS_VERIFY
+      value: ""
+
+  - name: dind
+    image: docker:29-dind
+    securityContext:
+      privileged: true
+    command: ["dockerd"]
+    args:
+    - "--host=tcp://0.0.0.0:2375"
+    - "--tls=false"
+    - "--insecure-registry=172.20.0.2:4000"
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
 
   - name: kubectl
     image: bitnami/kubectl:latest
     command: ["cat"]
     tty: true
-
-  volumes:
-  - name: docker-sock
-    hostPath:
-      path: /var/run/docker.sock
-      type: Socket
 """
         }
     }
@@ -59,14 +62,17 @@ spec:
             steps {
                 container('docker') {
                     sh '''
-                        echo "=== Docker Debug ==="
-                        ls -l /var/run/docker.sock
-                        docker info
+                        echo "Waiting for Docker daemon to be ready..."
+                        for i in {1..30}; do
+                            if docker info >/dev/null 2>&1; then
+                                echo "Docker daemon is ready!"
+                                break
+                            fi
+                            echo "Waiting... ($i/30)"
+                            sleep 3
+                        done
                         
-                        echo "=== Building image ==="
                         docker build -t 172.20.0.2:4000/flask_hello:latest .
-                        
-                        echo "=== Pushing image ==="
                         docker push 172.20.0.2:4000/flask_hello:latest
                     '''
                 }
