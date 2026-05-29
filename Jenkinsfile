@@ -23,7 +23,7 @@ spec:
     - name: DOCKER_HOST
       value: tcp://localhost:2375
     - name: DOCKER_TLS_VERIFY
-      value: ""
+      value: "0"
 
   - name: dind
     image: docker:29-dind
@@ -49,41 +49,34 @@ spec:
     triggers { pollSCM('* * * * *') }
 
     stages {
-        stage('Test python') {
-            steps {
-                container('python') {
-                    sh "pip install -r requirements.txt"
-                    sh "python test.py"
-                }
-            }
-        }
-
         stage('Build image') {
             steps {
                 container('docker') {
                     sh '''
-                        echo "Waiting for Docker daemon to be ready..."
-                        for i in {1..30}; do
-                            if docker info >/dev/null 2>&1; then
-                                echo "Docker daemon is ready!"
+                        set -x  # Active le debug
+                        
+                        echo "=== Environment variables ==="
+                        env | grep DOCKER
+                        
+                        echo "=== Checking Docker connection ==="
+                        docker info || echo "Docker info failed"
+                        
+                        echo "=== Waiting for dind daemon (max 60s) ==="
+                        for i in {1..20}; do
+                            if docker info > /dev/null 2>&1; then
+                                echo "✅ Docker daemon is ready!"
                                 break
                             fi
-                            echo "Waiting... ($i/30)"
+                            echo "Waiting... ($i/20)"
                             sleep 3
                         done
                         
+                        echo "=== Building image ==="
                         docker build -t 172.20.0.2:4000/flask_hello:latest .
+                        
+                        echo "=== Pushing image ==="
                         docker push 172.20.0.2:4000/flask_hello:latest
                     '''
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                container('kubectl') {
-                    sh "kubectl apply -f ./kubernetes/deployment.yaml"
-                    sh "kubectl apply -f ./kubernetes/service.yaml"
                 }
             }
         }
