@@ -16,12 +16,18 @@ spec:
     tty: true
 
   - name: docker
-    image: docker:29-cli          # ← Mis à jour pour ta version 29.5.2
+    image: docker:29-cli
     command: ["cat"]
     tty: true
+    securityContext:
+      privileged: true          # Important
+      runAsUser: 0              # Exécuter en root
     volumeMounts:
     - mountPath: /var/run/docker.sock
       name: docker-sock
+    env:
+    - name: DOCKER_HOST
+      value: unix:///var/run/docker.sock
 
   - name: kubectl
     image: bitnami/kubectl:latest
@@ -32,13 +38,12 @@ spec:
   - name: docker-sock
     hostPath:
       path: /var/run/docker.sock
+      type: Socket
 """
         }
     }
 
-    triggers {
-        pollSCM('* * * * *')
-    }
+    triggers { pollSCM('* * * * *') }
 
     stages {
         stage('Test python') {
@@ -54,10 +59,15 @@ spec:
             steps {
                 container('docker') {
                     sh '''
-                        docker build -t 172.20.0.2:4000/pythontest:latest .
-                    '''
-                    sh '''
-                        docker push 172.20.0.2:4000/pythontest:latest
+                        echo "=== Docker Debug ==="
+                        ls -l /var/run/docker.sock
+                        docker info
+                        
+                        echo "=== Building image ==="
+                        docker build -t 172.20.0.2:4000/flask_hello:latest .
+                        
+                        echo "=== Pushing image ==="
+                        docker push 172.20.0.2:4000/flask_hello:latest
                     '''
                 }
             }
