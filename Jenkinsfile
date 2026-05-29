@@ -2,6 +2,7 @@ pipeline {
     agent {
         kubernetes {
             label 'jenkins-agent-my-app'
+            inheritFrom ''                    // ← Important : ignore les templates existants
             yaml """
 apiVersion: v1
 kind: Pod
@@ -47,28 +48,37 @@ spec:
     }
 
     stages {
+        stage('Test python') {
+            steps {
+                container('python') {
+                    sh "pip install -r requirements.txt"
+                    sh "python test.py"
+                }
+            }
+        }
+
         stage('Build & Push') {
             steps {
                 container('docker') {
                     sh '''
-                        echo "=== DEBUG DIN D ==="
-                        echo "Current DOCKER_HOST = $DOCKER_HOST"
+                        echo "Waiting for DinD daemon..."
+                        sleep 12
                         
-                        echo "=== Waiting for dind (15 seconds) ==="
-                        sleep 15
-                        
-                        echo "=== Testing connection ==="
-                        nc -z localhost 2375 && echo "Port 2375 is open" || echo "Port 2375 is NOT open"
-                        
-                        echo "=== Docker info with explicit host ==="
-                        docker --host tcp://localhost:2375 info || echo "Docker info FAILED"
-                        
-                        echo "=== Building image ==="
+                        echo "Building image..."
                         docker --host tcp://localhost:2375 build -t 172.20.0.2:4000/flask_hello:latest .
                         
-                        echo "=== Pushing image ==="
+                        echo "Pushing image..."
                         docker --host tcp://localhost:2375 push 172.20.0.2:4000/flask_hello:latest
                     '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                container('kubectl') {
+                    sh "kubectl apply -f ./kubernetes/deployment.yaml"
+                    sh "kubectl apply -f ./kubernetes/service.yaml"
                 }
             }
         }
