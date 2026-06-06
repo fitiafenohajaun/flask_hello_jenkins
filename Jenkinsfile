@@ -20,11 +20,5 @@ pipeline {
                 sh 'python test.py'
             }
         }
-
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t flask_hello .'
-            }
-        }
     }
 }
