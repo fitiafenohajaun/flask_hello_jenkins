@@ -20,5 +20,22 @@ pipeline {
                 sh 'docker build -t flask_hello:latest .'
             }
         }
+
+        stage('Push Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub_credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker tag flask_hello:latest fitiafenohajaun/flask_hello_jenkins:latest
+                    docker push fitiafenohajaun/flask_hello_jenkins:latest
+                    '''
+                }
+            }
+        }
     }
 }
