@@ -1,23 +1,23 @@
 pipeline {
 
-    agent {
-        docker {
-            image 'python:3.11'
-            args '-u root'
-        }
-    }
+    agent any
 
     stages {
 
-        stage('Install Dependencies') {
+        stage('Test Flask') {
             steps {
-                sh 'pip install -r requirements.txt'
+                script {
+                    docker.image('python:3.11').inside('-u root') {
+                        sh 'pip install -r requirements.txt'
+                        sh 'python test.py'
+                    }
+                }
             }
         }
 
-        stage('Run Tests') {
+        stage('Build Docker Image') {
             steps {
-                sh 'python test.py'
+                sh 'docker build -t flask_hello:latest .'
             }
         }
     }
